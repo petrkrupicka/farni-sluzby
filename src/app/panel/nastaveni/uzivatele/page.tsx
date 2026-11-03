@@ -6,6 +6,7 @@ import { X } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { ROLE_LABEL } from "@/lib/labels";
 import { addRole, ASSIGNABLE_ROLES, hasRole, isMainAdmin, removeRole } from "@/lib/roles";
+import { sendTemplate } from "@/lib/mail";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { servicesManagedBy, teamsManagedBy, useParish } from "@/lib/store";
 import type { AppRole, ParishState, Profile } from "@/lib/types";
@@ -82,6 +83,30 @@ export default function UsersSettingsPage() {
     await persistRoles(person, removeRole(person.roles, role));
   };
 
+  const removeUser = async (person: Profile) => {
+    if (person.id === currentUser.id) return;
+    if (hasRole(person, "hlavni_spravce") && !otherAdminExists(person.id)) return;
+    const serviceBlock = removalBlock(state, person.id, "spravce_sluzby");
+    const teamBlock = removalBlock(state, person.id, "spravce_tymu");
+    if (serviceBlock || teamBlock) {
+      alert(
+        `Účet nelze odstranit, dokud spravuje ${[...(serviceBlock?.names ?? []), ...(teamBlock?.names ?? [])].join(", ")}. Nejdřív správu převeďte.`,
+      );
+      return;
+    }
+    if (!window.confirm(`Odstranit uživatele ${person.fullName}? Dostane e-mailové upozornění.`)) {
+      return;
+    }
+    void sendTemplate(state, "admin_removed_user", [person], {
+      spravce: currentUser.fullName,
+    });
+    dispatch({ type: "DELETE_USER", userId: person.id });
+    const client = getSupabaseBrowserClient();
+    if (client) {
+      await client.from("profiles").delete().eq("id", person.id);
+    }
+  };
+
   return (
     <div>
       <PageHeader
@@ -144,6 +169,12 @@ export default function UsersSettingsPage() {
                   </Link>
                   .
                 </p>
+              ) : null}
+              {person.id !== currentUser.id &&
+              !(hasRole(person, "hlavni_spravce") && !otherAdminExists(person.id)) ? (
+                <button type="button" className="btn btn-danger" onClick={() => void removeUser(person)}>
+                  Odstranit uživatele
+                </button>
               ) : null}
               {available.length > 0 ? (
                 <label className="block text-sm font-semibold">

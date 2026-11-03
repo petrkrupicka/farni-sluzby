@@ -1,3 +1,6 @@
+import type { AboutPageContent } from "./about-content";
+import type { EmailTemplate, EmailTemplateId, NotificationPrefs } from "./mail-templates";
+
 export type AppRole =
   | "hlavni_spravce"
   | "spravce_sluzby"
@@ -23,6 +26,9 @@ export type Profile = {
   phone: string;
   googleCalendarSync: boolean;
   googleEmail: string;
+  notifyNewPlan: boolean;
+  notifyNewSubstitute: boolean;
+  notifyNewSwap: boolean;
   roles: AppRole[];
 };
 
@@ -122,5 +128,9 @@ export type ParishState = {
   assignments: PlanAssignment[];
   swaps: SwapRequest[];
   listings: SubstituteListing[];
+  emailTemplates: Record<EmailTemplateId, EmailTemplate>;
+  aboutPage: AboutPageContent;
   currentUserId: string;
 };
+
+export type { NotificationPrefs, EmailTemplate, EmailTemplateId };

@@ -74,6 +74,22 @@ alter table public.profiles add column if not exists city text;
 alter table public.profiles add column if not exists zip text;
 alter table public.profiles add column if not exists google_calendar_sync boolean not null default false;
 alter table public.profiles add column if not exists google_email text;
+alter table public.profiles add column if not exists notify_new_plan boolean not null default true;
+alter table public.profiles add column if not exists notify_new_substitute boolean not null default true;
+alter table public.profiles add column if not exists notify_new_swap boolean not null default true;
+
+create table if not exists public.email_templates (
+  id text primary key,
+  subject text not null,
+  body_html text not null,
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.about_page (
+  id text primary key,
+  payload jsonb not null,
+  updated_at timestamptz not null default now()
+);
 
 update public.profiles
 set roles = case
@@ -253,6 +269,8 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
 
+alter table public.email_templates enable row level security;
+alter table public.about_page enable row level security;
 alter table public.profiles enable row level security;
 alter table public.services enable row level security;
 alter table public.service_managers enable row level security;
@@ -456,6 +474,33 @@ exception when duplicate_object then null;
 end $$;
 do $$ begin
   create policy managers_write on public.service_managers for all to authenticated
+    using (public.is_main_admin()) with check (public.is_main_admin());
+exception when duplicate_object then null;
+end $$;
+do $$ begin
+  create policy profiles_delete_admin on public.profiles for delete to authenticated
+    using (public.is_main_admin());
+exception when duplicate_object then null;
+end $$;
+
+alter table public.email_templates enable row level security;
+do $$ begin
+  create policy email_templates_select on public.email_templates for select to authenticated using (true);
+exception when duplicate_object then null;
+end $$;
+do $$ begin
+  create policy email_templates_write on public.email_templates for all to authenticated
+    using (public.is_main_admin()) with check (public.is_main_admin());
+exception when duplicate_object then null;
+end $$;
+
+alter table public.about_page enable row level security;
+do $$ begin
+  create policy about_page_select on public.about_page for select to authenticated using (true);
+exception when duplicate_object then null;
+end $$;
+do $$ begin
+  create policy about_page_write on public.about_page for all to authenticated
     using (public.is_main_admin()) with check (public.is_main_admin());
 exception when duplicate_object then null;
 end $$;

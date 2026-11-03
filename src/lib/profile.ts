@@ -1,3 +1,4 @@
+import { DEFAULT_NOTIFICATION_PREFS } from "./mail-templates";
 import { migrateProfileRoles } from "./roles";
 import type { AppRole, Profile } from "./types";
 
@@ -14,7 +15,15 @@ export function joinFullName(firstName: string, lastName: string) {
 
 export function emptyProfileFields(): Pick<
   Profile,
-  "street" | "city" | "zip" | "phone" | "googleCalendarSync" | "googleEmail"
+  | "street"
+  | "city"
+  | "zip"
+  | "phone"
+  | "googleCalendarSync"
+  | "googleEmail"
+  | "notifyNewPlan"
+  | "notifyNewSubstitute"
+  | "notifyNewSwap"
 > {
   return {
     street: "",
@@ -23,6 +32,7 @@ export function emptyProfileFields(): Pick<
     phone: "",
     googleCalendarSync: false,
     googleEmail: "",
+    ...DEFAULT_NOTIFICATION_PREFS,
   };
 }
 
@@ -40,6 +50,9 @@ export function migrateProfile(profile: {
   zip?: string;
   googleCalendarSync?: boolean;
   googleEmail?: string;
+  notifyNewPlan?: boolean;
+  notifyNewSubstitute?: boolean;
+  notifyNewSwap?: boolean;
 }): Profile {
   const withRoles = migrateProfileRoles(profile);
   const split = splitFullName(withRoles.fullName);
@@ -56,5 +69,8 @@ export function migrateProfile(profile: {
     phone: profile.phone ?? "",
     googleCalendarSync: Boolean(profile.googleCalendarSync),
     googleEmail: profile.googleEmail ?? "",
+    notifyNewPlan: profile.notifyNewPlan !== false,
+    notifyNewSubstitute: profile.notifyNewSubstitute !== false,
+    notifyNewSwap: profile.notifyNewSwap !== false,
   };
 }

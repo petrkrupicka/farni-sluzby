@@ -10,6 +10,7 @@ import {
   Store,
   UserCheck,
   Users,
+  Bell,
   type LucideIcon,
 } from "lucide-react";
 
@@ -68,6 +69,13 @@ export const SETTINGS_NAV: NavItem[] = [
     icon: UserCheck,
     show: "main_admin",
     text: "Přidávání rolí k dobrovolníkovi",
+  },
+  {
+    href: "/panel/nastaveni/upozorneni",
+    label: "Upozornění",
+    icon: Bell,
+    show: "main_admin",
+    text: "Šablony e-mailů a systémové zprávy",
   },
 ];
 

@@ -1,4 +1,6 @@
 import { fromDateAndTime, toIso } from "./dates";
+import { defaultAboutPage } from "./about-content";
+import { defaultEmailTemplates } from "./mail-templates";
 import { emptyProfileFields, joinFullName } from "./profile";
 import { normalizeRoles } from "./roles";
 import type { AppRole, ParishState, Profile } from "./types";
@@ -294,5 +296,7 @@ export function createSeedState(): ParishState {
         listedAt: "2026-10-21T09:00:00.000Z",
       },
     ],
+    emailTemplates: defaultEmailTemplates(),
+    aboutPage: defaultAboutPage(),
   };
 }

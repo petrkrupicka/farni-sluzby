@@ -12,7 +12,10 @@ import {
 } from "react";
 import { useAuth } from "./auth";
 import { fillEmptyAssignments, generatePlan } from "./algorithms";
-import { hoursUntil, overlaps } from "./dates";
+import { formatDate, formatDateTime, hoursUntil, overlaps } from "./dates";
+import { mergeAboutPage, type AboutPageContent } from "./about-content";
+import { sendTemplate } from "./mail";
+import { mergeEmailTemplates, type EmailTemplateId, type NotificationPrefs } from "./mail-templates";
 import { joinFullName, migrateProfile } from "./profile";
 import { addRole, hasRole, isMainAdmin, removeRole } from "./roles";
 import { createSeedState } from "./seed";
@@ -61,6 +64,16 @@ type Action =
   | { type: "RESOLVE_SWAP"; swapId: string; accept: boolean }
   | { type: "REQUEST_SUB"; assignmentId: string }
   | { type: "CLAIM_SUB"; listingId: string }
+  | { type: "DELETE_LISTING"; listingId: string }
+  | { type: "DELETE_SWAP"; swapId: string }
+  | { type: "DELETE_USER"; userId: string }
+  | {
+      type: "UPDATE_EMAIL_TEMPLATE";
+      id: EmailTemplateId;
+      patch: { subject: string; bodyHtml: string };
+    }
+  | { type: "SET_NOTIFICATION_PREFS"; userId: string; prefs: NotificationPrefs }
+  | { type: "SET_ABOUT_PAGE"; page: AboutPageContent }
   | {
       type: "UPDATE_PROFILE";
       userId: string;
@@ -108,6 +121,25 @@ function migrateState(state: ParishState): ParishState {
     memberships: state.memberships.map((m) =>
       m.status === "ceka" ? { ...m, status: "schvaleno" } : m,
     ),
+    emailTemplates: mergeEmailTemplates(state.emailTemplates),
+    aboutPage: mergeAboutPage(state.aboutPage),
+  };
+}
+
+function peopleOnService(state: ParishState, serviceId: string) {
+  const ids = new Set([
+    ...approvedIds(state, serviceId),
+    ...state.teams.filter((team) => team.serviceId === serviceId).flatMap((team) => team.memberIds),
+  ]);
+  return state.profiles.filter((profile) => ids.has(profile.id));
+}
+
+function assignmentVars(state: ParishState, assignment: PlanAssignment) {
+  const service = state.services.find((item) => item.id === assignment.serviceId);
+  return {
+    sluzba: service?.name ?? "",
+    termin: formatDateTime(assignment.startsAt),
+    nazev: assignment.title,
   };
 }
 
@@ -641,6 +673,89 @@ function reducer(state: ParishState, action: Action): ParishState {
         ),
       };
     }
+    case "DELETE_LISTING": {
+      const listing = state.listings.find((item) => item.id === action.listingId);
+      if (!listing) return state;
+      return {
+        ...state,
+        listings: state.listings.filter((item) => item.id !== listing.id),
+        assignments: state.assignments.map((item) =>
+          item.id === listing.assignmentId
+            ? { ...item, volunteerId: listing.requestedBy, status: "prirazeno" }
+            : item,
+        ),
+      };
+    }
+    case "DELETE_SWAP": {
+      const swap = state.swaps.find((item) => item.id === action.swapId);
+      if (!swap) return state;
+      return {
+        ...state,
+        swaps: state.swaps.filter((item) => item.id !== swap.id),
+        assignments:
+          swap.status === "ceka"
+            ? state.assignments.map((item) =>
+                item.id === swap.fromAssignmentId || item.id === swap.toAssignmentId
+                  ? { ...item, status: "prirazeno" }
+                  : item,
+              )
+            : state.assignments,
+      };
+    }
+    case "DELETE_USER": {
+      if (action.userId === state.currentUserId) return state;
+      const person = state.profiles.find((item) => item.id === action.userId);
+      if (!person) return state;
+      if (
+        hasRole(person, "hlavni_spravce") &&
+        !state.profiles.some((item) => item.id !== person.id && hasRole(item, "hlavni_spravce"))
+      ) {
+        return state;
+      }
+      return {
+        ...state,
+        profiles: state.profiles.filter((item) => item.id !== person.id),
+        memberships: state.memberships.filter((item) => item.userId !== person.id),
+        listings: state.listings.filter(
+          (item) => item.requestedBy !== person.id && item.claimedBy !== person.id,
+        ),
+        swaps: state.swaps.filter(
+          (item) => item.requesterId !== person.id && item.targetId !== person.id,
+        ),
+        services: state.services.map((item) => ({
+          ...item,
+          managerIds: item.managerIds.filter((id) => id !== person.id),
+        })),
+        teams: state.teams.map((item) => ({
+          ...item,
+          memberIds: item.memberIds.filter((id) => id !== person.id),
+        })),
+        assignments: state.assignments.map((item) =>
+          item.volunteerId === person.id ? { ...item, volunteerId: undefined } : item,
+        ),
+      };
+    }
+    case "UPDATE_EMAIL_TEMPLATE":
+      return {
+        ...state,
+        emailTemplates: {
+          ...state.emailTemplates,
+          [action.id]: {
+            ...state.emailTemplates[action.id],
+            subject: action.patch.subject,
+            bodyHtml: action.patch.bodyHtml,
+          },
+        },
+      };
+    case "SET_NOTIFICATION_PREFS":
+      return {
+        ...state,
+        profiles: state.profiles.map((item) =>
+          item.id === action.userId ? { ...item, ...action.prefs } : item,
+        ),
+      };
+    case "SET_ABOUT_PAGE":
+      return { ...state, aboutPage: mergeAboutPage(action.page) };
     default:
       return state;
   }
@@ -706,7 +821,11 @@ export function ParishProvider({ children }: { children: ReactNode }) {
     const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL?.trim().toLowerCase();
     const bootstrapAdmin = Boolean(adminEmail && user.email?.toLowerCase() === adminEmail);
     void Promise.resolve(
-      client.from("profiles").select("role, roles, full_name, email").eq("id", user.id).maybeSingle(),
+      client
+        .from("profiles")
+        .select("role, roles, full_name, email, notify_new_plan, notify_new_substitute, notify_new_swap")
+        .eq("id", user.id)
+        .maybeSingle(),
     )
       .then(async ({ data }) => {
         const volunteerRoles: AppRole[] = ["dobrovolnik"];
@@ -718,6 +837,19 @@ export function ParishProvider({ children }: { children: ReactNode }) {
             email: user.email ?? "",
             role: bootstrapAdmin ? "hlavni_spravce" : "dobrovolnik",
             roles: bootstrapAdmin ? adminRoles : volunteerRoles,
+            notify_new_plan: true,
+            notify_new_substitute: true,
+            notify_new_swap: true,
+          });
+        } else {
+          dispatch({
+            type: "SET_NOTIFICATION_PREFS",
+            userId: user.id,
+            prefs: {
+              notifyNewPlan: data.notify_new_plan !== false,
+              notifyNewSubstitute: data.notify_new_substitute !== false,
+              notifyNewSwap: data.notify_new_swap !== false,
+            },
           });
         }
         const remoteRoles = Array.isArray(data?.roles) ? (data.roles as AppRole[]) : [];
@@ -739,6 +871,23 @@ export function ParishProvider({ children }: { children: ReactNode }) {
       .catch(() => {
         /* lokální data dál stačí */
       });
+    void Promise.resolve(client.from("email_templates").select("id, subject, body_html")).then(({ data }) => {
+      for (const row of data ?? []) {
+        if (!row?.id) continue;
+        dispatch({
+          type: "UPDATE_EMAIL_TEMPLATE",
+          id: row.id as EmailTemplateId,
+          patch: { subject: row.subject ?? "", bodyHtml: row.body_html ?? "" },
+        });
+      }
+    });
+    void Promise.resolve(client.from("about_page").select("payload").eq("id", "about").maybeSingle()).then(
+      ({ data }) => {
+        if (data?.payload) {
+          dispatch({ type: "SET_ABOUT_PAGE", page: mergeAboutPage(data.payload) });
+        }
+      },
+    );
   }, [hydrated, ready, user, localDebug]);
 
   useEffect(() => {
@@ -789,7 +938,19 @@ export function ParishProvider({ children }: { children: ReactNode }) {
             a.startsAt >= `${startsOn}T00:00:00.000Z` &&
             a.startsAt <= `${endsOn}T23:59:59.999Z`,
         ),
-      generate: (payload, overwrite) => dispatch({ type: "GENERATE", payload, overwrite }),
+      generate: (payload, overwrite) => {
+        dispatch({ type: "GENERATE", payload, overwrite });
+        const service = state.services.find((item) => item.id === payload.serviceId);
+        void sendTemplate(
+          state,
+          "new_plan",
+          peopleOnService(state, payload.serviceId).filter((person) => person.notifyNewPlan),
+          {
+            sluzba: service?.name ?? "",
+            obdobi: `${formatDate(`${payload.startsOn}T12:00:00`)} – ${formatDate(`${payload.endsOn}T12:00:00`)}`,
+          },
+        );
+      },
       isMine: (assignment) => isMine(state, assignment, currentUser.id),
       canRequestAbsence: (assignment) => canRequestAbsence(state, assignment, currentUser.id),
       actorFor: (assignment) => {
@@ -825,6 +986,15 @@ export function ParishProvider({ children }: { children: ReactNode }) {
           return { ok: false, message: "Tento termín nemůžete vyměnit. U týmové služby žádá správce týmu." };
         }
         dispatch({ type: "REQUEST_SWAP", fromId, toId });
+        const targetId = actorFor(state, to);
+        const target = state.profiles.find((person) => person.id === targetId);
+        if (target?.notifyNewSwap) {
+          void sendTemplate(state, "new_swap", [target], {
+            ...assignmentVars(state, to),
+            nabidka: formatDateTime(from.startsAt),
+            zadatel: currentUser.fullName,
+          });
+        }
         return { ok: true };
       },
       requestSubstitute: (assignmentId) => {
@@ -847,6 +1017,17 @@ export function ParishProvider({ children }: { children: ReactNode }) {
           };
         }
         dispatch({ type: "REQUEST_SUB", assignmentId });
+        void sendTemplate(
+          state,
+          "new_substitute",
+          peopleOnService(state, assignment.serviceId).filter(
+            (person) => person.notifyNewSubstitute && person.id !== currentUser.id,
+          ),
+          {
+            ...assignmentVars(state, assignment),
+            zadatel: currentUser.fullName,
+          },
+        );
         return { ok: true };
       },
       claimSubstitute: (listingId) => {
