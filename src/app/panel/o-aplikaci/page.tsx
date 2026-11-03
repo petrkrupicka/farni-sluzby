@@ -3,7 +3,12 @@
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { RichTextEditor } from "@/components/rich-text-editor";
-import { mergeAboutPage, type AboutChangelogEntry, type AboutPageContent } from "@/lib/about-content";
+import {
+  APP_VERSION,
+  mergeAboutPage,
+  type AboutChangelogEntry,
+  type AboutPageContent,
+} from "@/lib/about-content";
 import { isMainAdmin } from "@/lib/roles";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useParish } from "@/lib/store";
@@ -117,21 +122,8 @@ export default function AboutPage() {
       ))}
 
       <section className="card space-y-3 p-5">
-        {editing ? (
-          <label className="block text-sm font-semibold">
-            Verze
-            <input
-              className="mt-1 w-full rounded-xl border border-line p-3"
-              value={draft.versionLabel}
-              onChange={(e) => setDraft({ ...draft, versionLabel: e.target.value })}
-            />
-          </label>
-        ) : (
-          <>
-            <h2 className="font-serif text-2xl">Verze</h2>
-            <p>{page.versionLabel}</p>
-          </>
-        )}
+        <h2 className="font-serif text-2xl">Verze</h2>
+        <p>Verze {APP_VERSION}</p>
 
         <details className="rounded-xl border border-line bg-[#fbf8f1] p-4" open={editing || undefined}>
           <summary className="cursor-pointer font-serif text-xl">Changelog</summary>

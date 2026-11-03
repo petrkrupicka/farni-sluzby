@@ -1,3 +1,5 @@
+export const APP_VERSION = "0.3";
+
 export type AboutChangelogEntry = {
   version: string;
   items: string[];
@@ -18,7 +20,7 @@ export type AboutPageContent = {
 
 const DEFAULT_CHANGELOG: AboutChangelogEntry[] = [
   {
-    version: "0.3",
+    version: APP_VERSION,
     items: [
       "Profil: sekce Upozornění (nový plán, záskok, výměna)",
       "Nastavení / Upozornění: úprava e-mailových šablon",
@@ -55,7 +57,7 @@ export function defaultAboutPage(): AboutPageContent {
   return {
     subtitle:
       "Farní služby pomáhají naplánovat dobrovolnické služby a řešit, když někdo nemůže přijít.",
-    versionLabel: "Verze 0.3",
+    versionLabel: `Verze ${APP_VERSION}`,
     changelog: DEFAULT_CHANGELOG.map((entry) => ({
       ...entry,
       items: [...entry.items],

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { ChevronDown, Church, Menu, Settings } from "lucide-react";
+import { APP_VERSION } from "@/lib/about-content";
 import { isNavActive, navAllowed, PRIMARY_NAV, SETTINGS_NAV, type NavItem } from "@/lib/nav";
 import { isMainAdmin, rolesLabel } from "@/lib/roles";
 import { useAuth } from "@/lib/auth";
@@ -49,7 +50,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Church size={20} />
             </span>
             <span>
-              <span className="block font-serif text-lg leading-none">Farní služby</span>
+              <span className="block font-serif text-lg leading-none">
+                Farní služby, verze {APP_VERSION}
+              </span>
               <span className="text-xs text-muted">Správa dobrovolníků</span>
             </span>
           </Link>
