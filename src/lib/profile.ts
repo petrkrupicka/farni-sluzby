@@ -26,19 +26,21 @@ export function emptyProfileFields(): Pick<
   };
 }
 
-export function migrateProfile(
-  profile: Omit<Profile, "roles" | "firstName" | "lastName"> & {
-    roles?: AppRole[];
-    role?: AppRole;
-    firstName?: string;
-    lastName?: string;
-    street?: string;
-    city?: string;
-    zip?: string;
-    googleCalendarSync?: boolean;
-    googleEmail?: string;
-  },
-): Profile {
+export function migrateProfile(profile: {
+  id: string;
+  fullName: string;
+  email: string;
+  phone?: string;
+  roles?: AppRole[];
+  role?: AppRole;
+  firstName?: string;
+  lastName?: string;
+  street?: string;
+  city?: string;
+  zip?: string;
+  googleCalendarSync?: boolean;
+  googleEmail?: string;
+}): Profile {
   const withRoles = migrateProfileRoles(profile);
   const split = splitFullName(withRoles.fullName);
   const firstName = profile.firstName?.trim() || split.firstName;

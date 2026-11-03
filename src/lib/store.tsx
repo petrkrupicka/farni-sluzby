@@ -693,23 +693,21 @@ export function ParishProvider({ children }: { children: ReactNode }) {
       "Dobrovolník";
     dispatch({
       type: "ENSURE_USER",
-      profile: {
+      profile: migrateProfile({
         id: user.id,
         fullName,
         email: user.email ?? "",
         roles: ["dobrovolnik"],
-      },
+      }),
     });
     if (localDebug) return;
     const client = getSupabaseBrowserClient();
     if (!client) return;
     const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL?.trim().toLowerCase();
     const bootstrapAdmin = Boolean(adminEmail && user.email?.toLowerCase() === adminEmail);
-    client
-      .from("profiles")
-      .select("role, roles, full_name, email")
-      .eq("id", user.id)
-      .maybeSingle()
+    void Promise.resolve(
+      client.from("profiles").select("role, roles, full_name, email").eq("id", user.id).maybeSingle(),
+    )
       .then(async ({ data }) => {
         const volunteerRoles: AppRole[] = ["dobrovolnik"];
         const adminRoles: AppRole[] = ["hlavni_spravce", "dobrovolnik"];
