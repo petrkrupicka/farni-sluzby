@@ -4,13 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { formatDate, nextPlanningWindow, toDateInput } from "@/lib/dates";
 import { ALGORITHM_LABEL } from "@/lib/labels";
+import { hasRole, isMainAdmin } from "@/lib/roles";
 import { useParish } from "@/lib/store";
 import type { PlanAlgorithm } from "@/lib/types";
 
 export default function PlanningPage() {
   const { state, currentUser, canManageService, periodExists, generate, dispatch } = useParish();
   const services = state.services.filter(
-    (s) => currentUser.role === "hlavni_spravce" || canManageService(s.id),
+    (s) => isMainAdmin(currentUser) || canManageService(s.id),
   );
   const [serviceId, setServiceId] = useState(services[0]?.id ?? "");
   const [startsOn, setStartsOn] = useState("");
@@ -68,7 +69,7 @@ export default function PlanningPage() {
   const payload = { serviceId, startsOn, endsOn, algorithm };
   const exists = startsOn && endsOn ? periodExists(serviceId, startsOn, endsOn) : false;
 
-  if (currentUser.role !== "hlavni_spravce" && currentUser.role !== "spravce_sluzby") {
+  if (!isMainAdmin(currentUser) && !hasRole(currentUser, "spravce_sluzby")) {
     return <p className="card p-5">Plánování je dostupné jen správcům.</p>;
   }
 

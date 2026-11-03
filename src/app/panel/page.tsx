@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AssignmentCard } from "@/components/assignment-card";
 import { PageHeader } from "@/components/page-header";
-import { ROLE_LABEL } from "@/lib/labels";
+import { rolesLabel } from "@/lib/roles";
 import { useParish } from "@/lib/store";
 
 export default function DashboardPage() {
@@ -32,7 +32,7 @@ export default function DashboardPage() {
     <div>
       <PageHeader
         title={`Pokoj s vámi, ${currentUser.fullName.split(" ")[0]}`}
-        subtitle={ROLE_LABEL[currentUser.role]}
+        subtitle={rolesLabel(currentUser)}
       />
       <div className="grid gap-3 sm:grid-cols-3">
         <Link href="/panel/vymeny" className="card p-4">
@@ -50,7 +50,7 @@ export default function DashboardPage() {
           </Link>
         ) : (
           <Link href="/panel/sluzby" className="card p-4">
-            <p className="text-sm text-muted">Farní služby</p>
+            <p className="text-sm text-muted">Moje služby</p>
             <p className="font-serif text-3xl text-forest">{state.services.length}</p>
           </Link>
         )}
@@ -68,7 +68,7 @@ export default function DashboardPage() {
           Otevřít kalendář
         </Link>
         <Link href="/panel/sluzby" className="btn btn-ghost">
-          Registrovat se ke službě
+          Moje služby
         </Link>
       </div>
     </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
@@ -15,9 +15,9 @@ export default function RegisterPage() {
   const [info, setInfo] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
-  if (ready && user) {
-    router.replace("/panel");
-  }
+  useEffect(() => {
+    if (ready && user) router.replace("/panel");
+  }, [ready, user, router]);
 
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-4 py-10">

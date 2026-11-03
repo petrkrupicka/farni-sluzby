@@ -3,15 +3,17 @@
 import { useState } from "react";
 import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
-import { MODE_LABEL, ROLE_LABEL, WEEKDAYS } from "@/lib/labels";
+import { ServicePreferences } from "@/components/service-preferences";
+import { MODE_LABEL, WEEKDAYS } from "@/lib/labels";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
+import { hasRole, isMainAdmin, rolesLabel } from "@/lib/roles";
 import { useParish } from "@/lib/store";
 import type { AssignmentMode } from "@/lib/types";
 
 export default function ServiceSettingsPage() {
   const { state, currentUser, canManageService, canAccessServiceSettings, dispatch } = useParish();
   const services = state.services.filter(
-    (s) => currentUser.role === "hlavni_spravce" || canManageService(s.id),
+    (s) => isMainAdmin(currentUser) || canManageService(s.id),
   );
   const [newName, setNewName] = useState("");
   const [newMode, setNewMode] = useState<AssignmentMode>("jednotlivci");
@@ -27,13 +29,13 @@ export default function ServiceSettingsPage() {
   return (
     <div>
       <PageHeader
-        title="Služby"
-        subtitle="Správce služby, typ přiřazení a rozvrhové sloty."
+        title="Správa služeb"
+        subtitle="Správce služby, typ přiřazení, rozvrhové sloty a podrobnosti dostupnosti."
       />
       <p className="card mb-4 p-4 text-sm text-muted">
         Ke službě se přihlásíte v{" "}
         <Link className="font-semibold text-forest underline" href="/panel/sluzby">
-          přihlášení ke službám
+          Moje služby
         </Link>
         .
       </p>
@@ -44,7 +46,7 @@ export default function ServiceSettingsPage() {
           : "zatím demo režim (data v prohlížeči). Doplňte NEXT_PUBLIC_SUPABASE_URL a NEXT_PUBLIC_SUPABASE_ANON_KEY a spusťte supabase/schema.sql."}
       </p>
 
-      {currentUser.role === "hlavni_spravce" ? (
+      {isMainAdmin(currentUser) ? (
         <form
           className="card mb-4 space-y-3 p-5"
           onSubmit={(e) => {
@@ -84,11 +86,11 @@ export default function ServiceSettingsPage() {
       <div className="space-y-4">
         {services.map((service) => {
           const slots = state.slots.filter((s) => s.serviceId === service.id);
-          const canEdit = currentUser.role === "hlavni_spravce" || canManageService(service.id);
+          const canEdit = isMainAdmin(currentUser) || canManageService(service.id);
           return (
             <section key={service.id} className="card space-y-3 p-5">
               <h2 className="font-serif text-2xl">{service.name}</h2>
-              {currentUser.role === "hlavni_spravce" ? (
+              {isMainAdmin(currentUser) ? (
                 <label className="block text-sm font-semibold">
                   Správce služby
                   <select
@@ -104,10 +106,10 @@ export default function ServiceSettingsPage() {
                   >
                     <option value="">Bez správce služby</option>
                     {state.profiles
-                      .filter((p) => p.role !== "hlavni_spravce")
+                      .filter((p) => !hasRole(p, "hlavni_spravce"))
                       .map((p) => (
                         <option key={p.id} value={p.id}>
-                          {p.fullName} · {ROLE_LABEL[p.role]}
+                          {p.fullName} · {rolesLabel(p)}
                         </option>
                       ))}
                   </select>
@@ -151,6 +153,7 @@ export default function ServiceSettingsPage() {
                 </ul>
                 {canEdit ? <AddSlotForm serviceId={service.id} /> : null}
               </div>
+              <ServicePreferences service={service} />
             </section>
           );
         })}

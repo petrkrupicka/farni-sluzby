@@ -13,6 +13,8 @@ import {
 import { useAuth } from "./auth";
 import { fillEmptyAssignments, generatePlan } from "./algorithms";
 import { hoursUntil, overlaps } from "./dates";
+import { joinFullName, migrateProfile } from "./profile";
+import { addRole, hasRole, isMainAdmin, removeRole } from "./roles";
 import { createSeedState } from "./seed";
 import { getSupabaseBrowserClient } from "./supabase/client";
 import type {
@@ -32,7 +34,8 @@ type Action =
   | { type: "RESET" }
   | { type: "SET_USER"; userId: string }
   | { type: "ENSURE_USER"; profile: Profile }
-  | { type: "SET_ROLE"; userId: string; role: AppRole }
+  | { type: "ADD_ROLE"; userId: string; role: AppRole }
+  | { type: "REMOVE_ROLE"; userId: string; role: AppRole }
   | { type: "SET_MEMBERSHIP"; id: string; status: MembershipStatus }
   | { type: "REGISTER"; serviceId: string }
   | { type: "UPDATE_SERVICE"; serviceId: string; patch: Partial<Service> }
@@ -57,7 +60,22 @@ type Action =
   | { type: "REQUEST_SWAP"; fromId: string; toId: string }
   | { type: "RESOLVE_SWAP"; swapId: string; accept: boolean }
   | { type: "REQUEST_SUB"; assignmentId: string }
-  | { type: "CLAIM_SUB"; listingId: string };
+  | { type: "CLAIM_SUB"; listingId: string }
+  | {
+      type: "UPDATE_PROFILE";
+      userId: string;
+      patch: Pick<
+        Profile,
+        | "firstName"
+        | "lastName"
+        | "street"
+        | "city"
+        | "zip"
+        | "phone"
+        | "googleCalendarSync"
+        | "googleEmail"
+      >;
+    };
 
 type GeneratePayload = {
   serviceId: string;
@@ -86,6 +104,7 @@ function saveState(state: ParishState) {
 function migrateState(state: ParishState): ParishState {
   return {
     ...state,
+    profiles: state.profiles.map((profile) => migrateProfile(profile)),
     memberships: state.memberships.map((m) =>
       m.status === "ceka" ? { ...m, status: "schvaleno" } : m,
     ),
@@ -96,6 +115,14 @@ export function isOnServiceTeam(state: ParishState, userId: string, serviceId: s
   return state.teams.some(
     (t) => t.serviceId === serviceId && t.memberIds.includes(userId),
   );
+}
+
+export function servicesManagedBy(state: ParishState, userId: string) {
+  return state.services.filter((service) => service.managerIds.includes(userId));
+}
+
+export function teamsManagedBy(state: ParishState, userId: string) {
+  return state.teams.filter((team) => team.managerId === userId);
 }
 
 function approvedIds(state: ParishState, serviceId: string) {
@@ -128,7 +155,7 @@ function canRequestAbsence(state: ParishState, assignment: PlanAssignment, userI
 function reducer(state: ParishState, action: Action): ParishState {
   switch (action.type) {
     case "HYDRATE":
-      return action.state;
+      return migrateState(action.state);
     case "RESET": {
       const seed = createSeedState();
       const me = state.profiles.find((p) => p.id === state.currentUserId);
@@ -151,8 +178,7 @@ function reducer(state: ParishState, action: Action): ParishState {
             p.id === found.id
               ? {
                   ...p,
-                  fullName: action.profile.fullName || p.fullName,
-                  email: action.profile.email || p.email,
+                  email: p.email || action.profile.email,
                 }
               : p,
           ),
@@ -163,20 +189,54 @@ function reducer(state: ParishState, action: Action): ParishState {
         currentUserId: action.profile.id,
         profiles: [
           ...state.profiles,
-          {
+          migrateProfile({
             ...action.profile,
-            role: "dobrovolnik",
-          },
+            roles: ["dobrovolnik"],
+          }),
         ],
       };
     }
-    case "SET_ROLE":
+    case "UPDATE_PROFILE":
       return {
         ...state,
         profiles: state.profiles.map((p) =>
-          p.id === action.userId ? { ...p, role: action.role } : p,
+          p.id === action.userId
+            ? {
+                ...p,
+                ...action.patch,
+                fullName: joinFullName(action.patch.firstName, action.patch.lastName),
+              }
+            : p,
         ),
       };
+    case "ADD_ROLE":
+      return {
+        ...state,
+        profiles: state.profiles.map((p) =>
+          p.id === action.userId ? { ...p, roles: addRole(p.roles, action.role) } : p,
+        ),
+      };
+    case "REMOVE_ROLE": {
+      if (action.role === "dobrovolnik") return state;
+      if (action.role === "hlavni_spravce") {
+        const otherAdmin = state.profiles.some(
+          (p) => p.id !== action.userId && hasRole(p, "hlavni_spravce"),
+        );
+        if (!otherAdmin) return state;
+      }
+      if (action.role === "spravce_sluzby" && servicesManagedBy(state, action.userId).length > 0) {
+        return state;
+      }
+      if (action.role === "spravce_tymu" && teamsManagedBy(state, action.userId).length > 0) {
+        return state;
+      }
+      return {
+        ...state,
+        profiles: state.profiles.map((p) =>
+          p.id === action.userId ? { ...p, roles: removeRole(p.roles, action.role) } : p,
+        ),
+      };
+    }
     case "SET_MEMBERSHIP":
       return {
         ...state,
@@ -240,11 +300,9 @@ function reducer(state: ParishState, action: Action): ParishState {
           s.id === action.serviceId ? { ...s, managerIds: nextIds } : s,
         ),
         profiles: state.profiles.map((p) => {
-          if (p.role === "hlavni_spravce") return p;
-          if (p.id === action.userId) return { ...p, role: "spravce_sluzby" };
-          if (previous.includes(p.id) && p.role === "spravce_sluzby" && !stillManages(p.id)) {
-            const leadsTeam = state.teams.some((t) => t.managerId === p.id);
-            return { ...p, role: leadsTeam ? "spravce_tymu" : "dobrovolnik" };
+          if (p.id === action.userId) return { ...p, roles: addRole(p.roles, "spravce_sluzby") };
+          if (previous.includes(p.id) && hasRole(p, "spravce_sluzby") && !stillManages(p.id)) {
+            return { ...p, roles: removeRole(p.roles, "spravce_sluzby") };
           }
           return p;
         }),
@@ -263,9 +321,7 @@ function reducer(state: ParishState, action: Action): ParishState {
             : t,
         ),
         profiles: state.profiles.map((p) =>
-          p.id === action.userId && p.role === "dobrovolnik"
-            ? { ...p, role: "spravce_tymu" }
-            : p,
+          p.id === action.userId ? { ...p, roles: addRole(p.roles, "spravce_tymu") } : p,
         ),
       };
     case "ADD_SERVICE": {
@@ -350,9 +406,7 @@ function reducer(state: ParishState, action: Action): ParishState {
         ],
         memberships: [...state.memberships, ...extraMemberships],
         profiles: state.profiles.map((p) =>
-          p.id === action.managerId && p.role === "dobrovolnik"
-            ? { ...p, role: "spravce_tymu" }
-            : p,
+          p.id === action.managerId ? { ...p, roles: addRole(p.roles, "spravce_tymu") } : p,
         ),
       };
     }
@@ -613,15 +667,15 @@ type Store = {
 
 const StoreContext = createContext<Store | null>(null);
 
-const GUEST: Profile = {
+const GUEST: Profile = migrateProfile({
   id: "guest",
   fullName: "Host",
   email: "",
-  role: "dobrovolnik",
-};
+  roles: ["dobrovolnik"],
+});
 
 export function ParishProvider({ children }: { children: ReactNode }) {
-  const { user, ready } = useAuth();
+  const { user, ready, localDebug } = useAuth();
   const [state, dispatch] = useReducer(reducer, undefined, createSeedState);
   const skipSave = useRef(true);
   const [hydrated, setHydrated] = useState(false);
@@ -643,36 +697,51 @@ export function ParishProvider({ children }: { children: ReactNode }) {
         id: user.id,
         fullName,
         email: user.email ?? "",
-        role: "dobrovolnik",
+        roles: ["dobrovolnik"],
       },
     });
+    if (localDebug) return;
     const client = getSupabaseBrowserClient();
     if (!client) return;
     const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL?.trim().toLowerCase();
     const bootstrapAdmin = Boolean(adminEmail && user.email?.toLowerCase() === adminEmail);
     client
       .from("profiles")
-      .select("role, full_name, email")
+      .select("role, roles, full_name, email")
       .eq("id", user.id)
       .maybeSingle()
       .then(async ({ data }) => {
+        const volunteerRoles: AppRole[] = ["dobrovolnik"];
+        const adminRoles: AppRole[] = ["hlavni_spravce", "dobrovolnik"];
         if (!data) {
           await client.from("profiles").insert({
             id: user.id,
             full_name: fullName,
             email: user.email ?? "",
             role: bootstrapAdmin ? "hlavni_spravce" : "dobrovolnik",
+            roles: bootstrapAdmin ? adminRoles : volunteerRoles,
           });
         }
-        const role = bootstrapAdmin
-          ? "hlavni_spravce"
-          : ((data?.role as AppRole | undefined) ?? "dobrovolnik");
-        if (bootstrapAdmin && data?.role !== "hlavni_spravce") {
-          await client.from("profiles").update({ role: "hlavni_spravce" }).eq("id", user.id);
+        const remoteRoles = Array.isArray(data?.roles) ? (data.roles as AppRole[]) : [];
+        const legacy = data?.role as AppRole | undefined;
+        if (bootstrapAdmin) {
+          await client
+            .from("profiles")
+            .update({ role: "hlavni_spravce", roles: adminRoles })
+            .eq("id", user.id);
+          dispatch({ type: "ADD_ROLE", userId: user.id, role: "hlavni_spravce" });
+          return;
         }
-        dispatch({ type: "SET_ROLE", userId: user.id, role });
+        for (const role of [...remoteRoles, ...(legacy ? [legacy] : [])]) {
+          if (role !== "dobrovolnik") {
+            dispatch({ type: "ADD_ROLE", userId: user.id, role });
+          }
+        }
+      })
+      .catch(() => {
+        /* lokální data dál stačí */
       });
-  }, [hydrated, ready, user]);
+  }, [hydrated, ready, user, localDebug]);
 
   useEffect(() => {
     if (skipSave.current) {
@@ -686,7 +755,7 @@ export function ParishProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<Store>(() => {
     const canManageService = (serviceId: string) => {
-      if (currentUser.role === "hlavni_spravce") return true;
+      if (isMainAdmin(currentUser)) return true;
       const service = state.services.find((s) => s.id === serviceId);
       return Boolean(service?.managerIds.includes(currentUser.id));
     };
@@ -695,10 +764,12 @@ export function ParishProvider({ children }: { children: ReactNode }) {
       state.teams.filter((t) => t.managerId === currentUser.id).map((t) => t.id);
 
     const canAccessServiceSettings =
-      currentUser.role === "hlavni_spravce" ||
+      isMainAdmin(currentUser) ||
+      hasRole(currentUser, "spravce_sluzby") ||
       state.services.some((s) => s.managerIds.includes(currentUser.id));
     const canAccessTeamSettings =
-      currentUser.role === "hlavni_spravce" ||
+      isMainAdmin(currentUser) ||
+      hasRole(currentUser, "spravce_tymu") ||
       state.teams.some((t) => t.managerId === currentUser.id);
 
     return {
@@ -796,7 +867,7 @@ export function ParishProvider({ children }: { children: ReactNode }) {
         const teamMember = state.teams.some(
           (t) => t.serviceId === assignment.serviceId && t.memberIds.includes(currentUser.id),
         );
-        if (!member && !teamMember && currentUser.role === "dobrovolnik") {
+        if (!member && !teamMember && !canManageService(assignment.serviceId)) {
           return { ok: false, message: "Záskok může převzít jen člen této služby." };
         }
         const busy = state.assignments.some(
@@ -824,6 +895,6 @@ export function useParish() {
   return ctx;
 }
 
-export function useRole(): AppRole {
-  return useParish().currentUser.role;
+export function useHasRole(role: AppRole) {
+  return hasRole(useParish().currentUser, role);
 }

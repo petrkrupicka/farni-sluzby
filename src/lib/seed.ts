@@ -1,5 +1,25 @@
 import { fromDateAndTime, toIso } from "./dates";
-import type { ParishState } from "./types";
+import { emptyProfileFields, joinFullName } from "./profile";
+import { normalizeRoles } from "./roles";
+import type { AppRole, ParishState, Profile } from "./types";
+
+function person(
+  id: string,
+  firstName: string,
+  lastName: string,
+  email: string,
+  extraRoles: AppRole[] = [],
+): Profile {
+  return {
+    id,
+    firstName,
+    lastName,
+    fullName: joinFullName(firstName, lastName),
+    email,
+    ...emptyProfileFields(),
+    roles: normalizeRoles(["dobrovolnik", ...extraRoles]),
+  };
+}
 
 const ids = {
   anna: "u-anna",
@@ -148,16 +168,16 @@ export function createSeedState(): ParishState {
   return {
     currentUserId: ids.anna,
     profiles: [
-      { id: ids.anna, fullName: "Anna Nováková", email: "anna@farnost.cz", role: "hlavni_spravce" },
-      { id: ids.petr, fullName: "Petr Svoboda", email: "petr@farnost.cz", role: "spravce_sluzby" },
-      { id: ids.eva, fullName: "Eva Králová", email: "eva@farnost.cz", role: "spravce_sluzby" },
-      { id: ids.marie, fullName: "Marie Dvořáková", email: "marie@farnost.cz", role: "spravce_tymu" },
-      { id: ids.tomas, fullName: "Tomáš Beneš", email: "tomas@farnost.cz", role: "spravce_tymu" },
-      { id: ids.jan, fullName: "Jan Horák", email: "jan@farnost.cz", role: "dobrovolnik" },
-      { id: ids.lucie, fullName: "Lucie Malá", email: "lucie@farnost.cz", role: "dobrovolnik" },
-      { id: ids.pavel, fullName: "Pavel Černý", email: "pavel@farnost.cz", role: "spravce_tymu" },
-      { id: ids.hana, fullName: "Hana Veselá", email: "hana@farnost.cz", role: "dobrovolnik" },
-      { id: ids.martin, fullName: "Martin Procházka", email: "martin@farnost.cz", role: "dobrovolnik" },
+      person(ids.anna, "Anna", "Nováková", "anna@farnost.cz", ["hlavni_spravce"]),
+      person(ids.petr, "Petr", "Svoboda", "petr@farnost.cz", ["spravce_sluzby"]),
+      person(ids.eva, "Eva", "Králová", "eva@farnost.cz", ["spravce_sluzby"]),
+      person(ids.marie, "Marie", "Dvořáková", "marie@farnost.cz", ["spravce_tymu"]),
+      person(ids.tomas, "Tomáš", "Beneš", "tomas@farnost.cz", ["spravce_tymu"]),
+      person(ids.jan, "Jan", "Horák", "jan@farnost.cz"),
+      person(ids.lucie, "Lucie", "Malá", "lucie@farnost.cz"),
+      person(ids.pavel, "Pavel", "Černý", "pavel@farnost.cz", ["spravce_tymu"]),
+      person(ids.hana, "Hana", "Veselá", "hana@farnost.cz"),
+      person(ids.martin, "Martin", "Procházka", "martin@farnost.cz"),
     ],
     services: [
       {

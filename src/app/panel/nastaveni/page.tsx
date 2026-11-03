@@ -14,7 +14,7 @@ export default function SettingsIndexPage() {
       return;
     }
     if (canAccessTeamSettings) {
-      router.replace("/panel/nastaveni/tymy");
+      router.replace("/panel/schvaleni");
       return;
     }
     router.replace("/panel");

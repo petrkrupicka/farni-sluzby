@@ -4,12 +4,13 @@ import { useState } from "react";
 import { AssignmentCard } from "@/components/assignment-card";
 import { PageHeader } from "@/components/page-header";
 import { toIso } from "@/lib/dates";
+import { hasRole, isMainAdmin } from "@/lib/roles";
 import { useParish } from "@/lib/store";
 
 export default function EventsPage() {
   const { state, currentUser, canManageService, dispatch } = useParish();
   const services = state.services.filter(
-    (s) => currentUser.role === "hlavni_spravce" || canManageService(s.id),
+    (s) => isMainAdmin(currentUser) || canManageService(s.id),
   );
   const [serviceId, setServiceId] = useState(services[0]?.id ?? "");
   const [title, setTitle] = useState("Vánoční bohoslužba");
@@ -28,7 +29,7 @@ export default function EventsPage() {
             kind: "person" as const,
           }));
 
-  if (currentUser.role !== "hlavni_spravce" && currentUser.role !== "spravce_sluzby") {
+  if (!isMainAdmin(currentUser) && !hasRole(currentUser, "spravce_sluzby")) {
     return <p className="card p-5">Jednorázové události smí vkládat jen správci.</p>;
   }
 

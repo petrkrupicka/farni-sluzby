@@ -3,12 +3,12 @@
 import { useState } from "react";
 import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
-import { ROLE_LABEL } from "@/lib/labels";
+import { hasRole, isMainAdmin, rolesLabel } from "@/lib/roles";
 import { isOnServiceTeam, useParish } from "@/lib/store";
 
 export default function TeamPlacementPage() {
   const { state, currentUser, canAccessTeamSettings, dispatch } = useParish();
-  const isMain = currentUser.role === "hlavni_spravce";
+  const isMain = isMainAdmin(currentUser);
 
   if (!canAccessTeamSettings) {
     return (
@@ -33,7 +33,7 @@ export default function TeamPlacementPage() {
   return (
     <div>
       <PageHeader
-        title="Zařazení do týmů"
+        title="Správa týmů"
         subtitle="U týmových služeb (úklid, kavárna) musí správce týmu nebo hlavní správce dobrovolníka zařadit do čety."
       />
       <p className="card mb-4 p-4 text-sm text-muted">
@@ -60,8 +60,8 @@ export default function TeamPlacementPage() {
                 teams={teams.map((t) => ({ id: t.id, name: t.name }))}
                 canCreate={isMain}
                 profiles={state.profiles
-                  .filter((p) => p.role !== "hlavni_spravce")
-                  .map((p) => ({ id: p.id, label: `${p.fullName} · ${ROLE_LABEL[p.role]}` }))}
+                  .filter((p) => !hasRole(p, "hlavni_spravce"))
+                  .map((p) => ({ id: p.id, label: `${p.fullName} · ${rolesLabel(p)}` }))}
                 onAssign={(teamId) => {
                   const team = state.teams.find((t) => t.id === teamId);
                   if (!team) return;

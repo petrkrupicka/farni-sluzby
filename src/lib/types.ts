@@ -13,10 +13,17 @@ export type PlanAlgorithm = "posloupnost" | "ferovy_nahodny";
 
 export type Profile = {
   id: string;
+  firstName: string;
+  lastName: string;
   fullName: string;
   email: string;
-  phone?: string;
-  role: AppRole;
+  street: string;
+  city: string;
+  zip: string;
+  phone: string;
+  googleCalendarSync: boolean;
+  googleEmail: string;
+  roles: AppRole[];
 };
 
 export type Service = {

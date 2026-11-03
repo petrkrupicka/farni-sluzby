@@ -2,12 +2,12 @@
 
 import { useState } from "react";
 import { PageHeader } from "@/components/page-header";
-import { ROLE_LABEL } from "@/lib/labels";
+import { hasRole, isMainAdmin, rolesLabel } from "@/lib/roles";
 import { isOnServiceTeam, useParish } from "@/lib/store";
 
 export default function TeamSettingsPage() {
   const { state, currentUser, canAccessTeamSettings, dispatch } = useParish();
-  const isMain = currentUser.role === "hlavni_spravce";
+  const isMain = isMainAdmin(currentUser);
   const teams = isMain
     ? state.teams
     : state.teams.filter((t) => t.managerId === currentUser.id);
@@ -74,10 +74,10 @@ export default function TeamSettingsPage() {
           >
             <option value="">Správce týmu</option>
             {state.profiles
-              .filter((p) => p.role !== "hlavni_spravce")
+              .filter((p) => !hasRole(p, "hlavni_spravce"))
               .map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.fullName} · {ROLE_LABEL[p.role]}
+                  {p.fullName} · {rolesLabel(p)}
                 </option>
               ))}
           </select>
@@ -119,10 +119,10 @@ export default function TeamSettingsPage() {
                       }
                     >
                       {state.profiles
-                        .filter((p) => p.role !== "hlavni_spravce")
+                        .filter((p) => !hasRole(p, "hlavni_spravce"))
                         .map((p) => (
                           <option key={p.id} value={p.id}>
-                            {p.fullName} · {ROLE_LABEL[p.role]}
+                            {p.fullName} · {rolesLabel(p)}
                           </option>
                         ))}
                     </select>

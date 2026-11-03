@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
+import { ServicePreferences } from "@/components/service-preferences";
 import { isOnServiceTeam, useParish } from "@/lib/store";
 
 export default function ServicesPage() {
@@ -10,14 +11,14 @@ export default function ServicesPage() {
   return (
     <div>
       <PageHeader
-        title="Farní služby"
-        subtitle="Přihlášením se stáváte členem služby. U týmových služeb vás správce týmu nebo hlavní správce zařadí do čety."
+        title="Moje služby"
+        subtitle="Přihlášením se stáváte členem služby. Pod každou službou nastavíte i svou dostupnost."
       />
       {canAccessServiceSettings ? (
         <p className="card mb-4 p-4 text-sm text-muted">
-          Rozvrh, výměny a správce služby nastavíte v{" "}
+          Rozvrh a správu služby najdete v{" "}
           <Link className="font-semibold text-forest underline" href="/panel/nastaveni/sluzby">
-            Nastavení → Služby
+            Nastavení → Správa služeb
           </Link>
           .
         </p>
@@ -64,6 +65,7 @@ export default function ServicesPage() {
                   Přihlásit se ke službě
                 </button>
               ) : null}
+              <ServicePreferences service={service} />
             </article>
           );
         })}

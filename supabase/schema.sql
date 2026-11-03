@@ -53,9 +53,34 @@ create table if not exists public.profiles (
   full_name text not null,
   email text not null unique,
   phone text,
+  first_name text,
+  last_name text,
+  street text,
+  city text,
+  zip text,
+  google_calendar_sync boolean not null default false,
+  google_email text,
   role public.app_role not null default 'dobrovolnik',
+  roles public.app_role[] not null default array['dobrovolnik'::public.app_role],
   created_at timestamptz not null default now()
 );
+
+alter table public.profiles
+  add column if not exists roles public.app_role[] not null default array['dobrovolnik'::public.app_role];
+alter table public.profiles add column if not exists first_name text;
+alter table public.profiles add column if not exists last_name text;
+alter table public.profiles add column if not exists street text;
+alter table public.profiles add column if not exists city text;
+alter table public.profiles add column if not exists zip text;
+alter table public.profiles add column if not exists google_calendar_sync boolean not null default false;
+alter table public.profiles add column if not exists google_email text;
+
+update public.profiles
+set roles = case
+  when role = 'dobrovolnik' then array['dobrovolnik'::public.app_role]
+  else array[role, 'dobrovolnik'::public.app_role]
+end
+where cardinality(roles) = 0 or not ('dobrovolnik' = any(roles));
 
 create table if not exists public.services (
   id uuid primary key default gen_random_uuid(),
@@ -210,12 +235,13 @@ security definer
 set search_path = public
 as $$
 begin
-  insert into public.profiles (id, full_name, email, role)
+  insert into public.profiles (id, full_name, email, role, roles)
   values (
     new.id,
     coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)),
     new.email,
-    'dobrovolnik'
+    'dobrovolnik',
+    array['dobrovolnik'::public.app_role]
   )
   on conflict (id) do nothing;
   return new;
@@ -253,7 +279,17 @@ returns boolean
 language sql
 stable
 as $$
-  select coalesce(public.current_role() = 'hlavni_spravce', false)
+  select coalesce(
+    exists (
+      select 1 from public.profiles
+      where id = auth.uid()
+        and (
+          role = 'hlavni_spravce'
+          or 'hlavni_spravce' = any(roles)
+        )
+    ),
+    false
+  )
 $$;
 
 create or replace function public.manages_service(p_service uuid)
