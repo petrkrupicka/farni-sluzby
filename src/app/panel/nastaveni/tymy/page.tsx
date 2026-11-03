@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { PageHeader } from "@/components/page-header";
-import { hasRole, isMainAdmin, rolesLabel } from "@/lib/roles";
+import { isMainAdmin, rolesLabel } from "@/lib/roles";
 import { isOnServiceTeam, useParish } from "@/lib/store";
 
 export default function TeamSettingsPage() {
@@ -73,13 +73,11 @@ export default function TeamSettingsPage() {
             onChange={(e) => setManagerId(e.target.value)}
           >
             <option value="">Správce týmu</option>
-            {state.profiles
-              .filter((p) => !hasRole(p, "hlavni_spravce"))
-              .map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.fullName} · {rolesLabel(p)}
-                </option>
-              ))}
+            {state.profiles.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.fullName} · {rolesLabel(p)}
+              </option>
+            ))}
           </select>
           <button className="btn btn-primary" type="submit">
             Založit tým
@@ -118,13 +116,12 @@ export default function TeamSettingsPage() {
                         })
                       }
                     >
-                      {state.profiles
-                        .filter((p) => !hasRole(p, "hlavni_spravce"))
-                        .map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.fullName} · {rolesLabel(p)}
-                          </option>
-                        ))}
+                      <option value="">Bez správce týmu</option>
+                      {state.profiles.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.fullName} · {rolesLabel(p)}
+                        </option>
+                      ))}
                     </select>
                   </label>
                 ) : null}

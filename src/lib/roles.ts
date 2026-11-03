@@ -16,6 +16,10 @@ export function normalizeRoles(roles: AppRole[]): AppRole[] {
   return ROLE_ORDER.filter((role) => set.has(role));
 }
 
+export function isDemoProfileId(id: string) {
+  return id.startsWith("u-");
+}
+
 export function hasRole(profile: Pick<Profile, "roles">, role: AppRole) {
   return profile.roles.includes(role);
 }

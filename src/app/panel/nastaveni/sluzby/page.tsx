@@ -6,7 +6,8 @@ import { PageHeader } from "@/components/page-header";
 import { ServicePreferences } from "@/components/service-preferences";
 import { MODE_LABEL, WEEKDAYS } from "@/lib/labels";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
-import { hasRole, isMainAdmin, rolesLabel } from "@/lib/roles";
+import { isLocalDebugAuthEnabled } from "@/lib/auth";
+import { isMainAdmin, rolesLabel } from "@/lib/roles";
 import { useParish } from "@/lib/store";
 import type { AssignmentMode } from "@/lib/types";
 
@@ -105,13 +106,11 @@ export default function ServiceSettingsPage() {
                     }
                   >
                     <option value="">Bez správce služby</option>
-                    {state.profiles
-                      .filter((p) => !hasRole(p, "hlavni_spravce"))
-                      .map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.fullName} · {rolesLabel(p)}
-                        </option>
-                      ))}
+                    {state.profiles.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.fullName} · {rolesLabel(p)}
+                      </option>
+                    ))}
                   </select>
                 </label>
               ) : (
@@ -158,9 +157,11 @@ export default function ServiceSettingsPage() {
           );
         })}
       </div>
-      <button className="btn btn-ghost mt-4" onClick={() => dispatch({ type: "RESET" })}>
-        Obnovit ukázková data
-      </button>
+      {isLocalDebugAuthEnabled() ? (
+        <button className="btn btn-ghost mt-4" onClick={() => dispatch({ type: "RESET" })}>
+          Obnovit ukázková data
+        </button>
+      ) : null}
     </div>
   );
 }

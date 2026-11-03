@@ -348,13 +348,17 @@ function reducer(state: ParishState, action: Action): ParishState {
             ? {
                 ...t,
                 managerId: action.userId,
-                memberIds: Array.from(new Set([...t.memberIds, action.userId])),
+                memberIds: action.userId
+                  ? Array.from(new Set([...t.memberIds, action.userId]))
+                  : t.memberIds,
               }
             : t,
         ),
-        profiles: state.profiles.map((p) =>
-          p.id === action.userId ? { ...p, roles: addRole(p.roles, "spravce_tymu") } : p,
-        ),
+        profiles: action.userId
+          ? state.profiles.map((p) =>
+              p.id === action.userId ? { ...p, roles: addRole(p.roles, "spravce_tymu") } : p,
+            )
+          : state.profiles,
       };
     case "ADD_SERVICE": {
       const slug = action.name
@@ -728,6 +732,7 @@ function reducer(state: ParishState, action: Action): ParishState {
         })),
         teams: state.teams.map((item) => ({
           ...item,
+          managerId: item.managerId === person.id ? "" : item.managerId,
           memberIds: item.memberIds.filter((id) => id !== person.id),
         })),
         assignments: state.assignments.map((item) =>

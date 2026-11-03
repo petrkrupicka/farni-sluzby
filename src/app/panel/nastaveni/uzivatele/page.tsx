@@ -5,7 +5,7 @@ import Link from "next/link";
 import { X } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { ROLE_LABEL } from "@/lib/labels";
-import { addRole, ASSIGNABLE_ROLES, hasRole, isMainAdmin, removeRole } from "@/lib/roles";
+import { addRole, ASSIGNABLE_ROLES, hasRole, isDemoProfileId, isMainAdmin, removeRole } from "@/lib/roles";
 import { sendTemplate } from "@/lib/mail";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { servicesManagedBy, teamsManagedBy, useParish } from "@/lib/store";
@@ -86,21 +86,24 @@ export default function UsersSettingsPage() {
   const removeUser = async (person: Profile) => {
     if (person.id === currentUser.id) return;
     if (hasRole(person, "hlavni_spravce") && !otherAdminExists(person.id)) return;
-    const serviceBlock = removalBlock(state, person.id, "spravce_sluzby");
-    const teamBlock = removalBlock(state, person.id, "spravce_tymu");
-    if (serviceBlock || teamBlock) {
-      alert(
-        `Účet nelze odstranit, dokud spravuje ${[...(serviceBlock?.names ?? []), ...(teamBlock?.names ?? [])].join(", ")}. Nejdřív správu převeďte.`,
-      );
-      return;
+    const demo = isDemoProfileId(person.id);
+    const managed = [
+      ...servicesManagedBy(state, person.id).map((service) => service.name),
+      ...teamsManagedBy(state, person.id).map((team) => team.name),
+    ];
+    const confirmText = demo
+      ? `Odstranit ukázkový účet ${person.fullName}? Ze služeb a týmů se odpojí.`
+      : managed.length > 0
+        ? `Odstranit ${person.fullName}? Je ještě u ${managed.join(", ")} — správa se uvolní.`
+        : `Odstranit uživatele ${person.fullName}? Dostane e-mailové upozornění.`;
+    if (!window.confirm(confirmText)) return;
+    if (!demo) {
+      void sendTemplate(state, "admin_removed_user", [person], {
+        spravce: currentUser.fullName,
+      });
     }
-    if (!window.confirm(`Odstranit uživatele ${person.fullName}? Dostane e-mailové upozornění.`)) {
-      return;
-    }
-    void sendTemplate(state, "admin_removed_user", [person], {
-      spravce: currentUser.fullName,
-    });
     dispatch({ type: "DELETE_USER", userId: person.id });
+    if (demo) return;
     const client = getSupabaseBrowserClient();
     if (client) {
       await client.from("profiles").delete().eq("id", person.id);
@@ -121,7 +124,12 @@ export default function UsersSettingsPage() {
           return (
             <article key={person.id} className="card space-y-3 p-4">
               <div>
-                <p className="font-semibold">{person.fullName}</p>
+                <p className="font-semibold">
+                  {person.fullName}
+                  {isDemoProfileId(person.id) ? (
+                    <span className="ml-2 text-xs font-normal text-muted">(ukázkový účet)</span>
+                  ) : null}
+                </p>
                 <p className="text-sm text-muted">{person.email}</p>
               </div>
               <div>
